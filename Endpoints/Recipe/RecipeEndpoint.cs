@@ -11,12 +11,43 @@ namespace FarmationRecipe.Endpoints.Recipe
     {
         public static void MapRecipeEndpoints(this IEndpointRouteBuilder routes)
         {
-            //routes.MapGet("/recipes", async (AppDbContext db) =>
-            //{
-            //    return await db.Recipes.ToListAsync();
-            //})
-            //.WithName("GetAllRecipes")
-            //.Produces<List<Recipe>>(StatusCodes.Status200OK);
+            routes.MapGet("/recipes", async (
+                string? keywords,
+                int pageNumber,
+                int pageSize,
+                AppDbContext db,
+                CancellationToken cancellationToken) =>
+            {
+                pageNumber = pageNumber == 0 ? 1 : pageNumber;
+                pageSize = pageSize == 0 ? 10 : pageSize;
+
+                var query = db.Recipes.AsQueryable();
+
+                if (!string.IsNullOrEmpty(keywords))
+                    query = query.Where(x => EF.Functions.ILike(x.Name, keywords));
+
+                var totalCount = await query.CountAsync(cancellationToken);
+
+                var recipes = await query
+                    .Skip((pageNumber - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToListAsync(cancellationToken);
+
+                return Results.Ok(new PaginatedResult<GetAllRecipePaginationResponse>
+                {
+                    Items = recipes.Select(x => new GetAllRecipePaginationResponse
+                    {
+                        Id = x.Id,
+                        Name = x.Name
+                    }).ToList(),
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalCount = totalCount
+                });
+            })
+            .WithName("GetAllRecipes")
+            .WithTags([ "Recipe" ])
+            .Produces<List<GetAllRecipePaginationResponse>>(StatusCodes.Status200OK);
 
             routes.MapGet("/recipes/{id}", async (Guid id, AppDbContext db, CancellationToken cancellationToken) =>
             {
