@@ -16,10 +16,7 @@
     public class RecipeStepRequest
     {
         public int Order { get; set; }
-        public string Description { get; set; } = null!;
-        public int Duration { get; set; }
-        public float Temperature { get; set; }
-        public float Pressure { get; set; }
+        public Dictionary<string, object>? Parameters { get; set; }
         public List<RecipeStepRequest>? RecipeStepChild { get; set; }
     }
 }

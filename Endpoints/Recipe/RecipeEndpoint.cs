@@ -3,6 +3,7 @@ using FarmationRecipe.Endpoints.Recipe.Requests;
 using FarmationRecipe.Endpoints.Recipe.Responses;
 using FarmationRecipe.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace FarmationRecipe.Endpoints.Recipe
 {
@@ -47,10 +48,9 @@ namespace FarmationRecipe.Endpoints.Recipe
                         Id = x.Id,
                         RecipeStepParentId = x.RecipeStepParentId,
                         Order = x.Order,
-                        Description = x.Description,
-                        Duration = x.Duration,
-                        Temperature = x.Temperature,
-                        Pressure = x.Pressure
+                        Parameters = x.Parameters != null ?
+                            x.Parameters.Deserialize<Dictionary<string, object>>()
+                            : null
                     })
                     .OrderBy(x => x.Order)
                     .ToList();
@@ -76,28 +76,25 @@ namespace FarmationRecipe.Endpoints.Recipe
                 if (isExist)
                     return Results.BadRequest("Recipe already exists");
 
-                async Task AddSubStepsAsync(Guid recipeId, Guid recipeStepParentId, int order, string description, int duration, float temperature, float pressure, List<RecipeStepRequest>? recipeStepChild)
+                async Task AddSubStepsAsync(Guid recipeId, Guid recipeStepParentId, int order, Dictionary<string, object>? parameters, List<RecipeStepRequest>? recipeStepChild)
                 {
+                    var jsonParameters = parameters != null ?
+                        JsonSerializer.Serialize(parameters)
+                        : null;
+
                     var newStep = new Models.RecipeStep
                     {
                         RecipeId = recipeId,
                         RecipeStepParentId = recipeStepParentId,
                         Order = order,
-                        Description = description,
-                        Duration = duration,
-                        Temperature = temperature,
-                        Pressure = pressure
+                        Parameters = jsonParameters == null ? null : JsonDocument.Parse(jsonParameters)
                     };
 
                     await db.RecipeStep.AddAsync(newStep, cancellationToken);
 
                     if (recipeStepChild != null)
-                    {
                         foreach (var stepChild in recipeStepChild)
-                        {
-                            await AddSubStepsAsync(recipeId, newStep.Id, stepChild.Order, stepChild.Description, stepChild.Duration, stepChild.Temperature, stepChild.Pressure, stepChild.RecipeStepChild);
-                        }
-                    }
+                            await AddSubStepsAsync(recipeId, newStep.Id, stepChild.Order, stepChild.Parameters, stepChild.RecipeStepChild);
                 }
 
                 var newRecipe = new Models.Recipe
@@ -126,25 +123,22 @@ namespace FarmationRecipe.Endpoints.Recipe
                 {
                     foreach (var step in request.RecipeSteps)
                     {
+                        var jsonParameters = step.Parameters != null ?
+                        JsonSerializer.Serialize(step.Parameters)
+                        : null;
+
                         var newStep = new Models.RecipeStep
                         {
                             RecipeId = newRecipe.Id,
                             Order = step.Order,
-                            Description = step.Description,
-                            Duration = step.Duration,
-                            Temperature = step.Temperature,
-                            Pressure = step.Pressure
+                            Parameters = jsonParameters == null ? null : JsonDocument.Parse(jsonParameters)
                         };
 
                         await db.RecipeStep.AddAsync(newStep, cancellationToken);
 
                         if (step.RecipeStepChild != null)
-                        {
                             foreach (var stepChild in step.RecipeStepChild)
-                            {
-                                await AddSubStepsAsync(newRecipe.Id, newStep.Id, stepChild.Order, stepChild.Description, stepChild.Duration, stepChild.Temperature, stepChild.Pressure, stepChild.RecipeStepChild);
-                            }
-                        }
+                                await AddSubStepsAsync(newRecipe.Id, newStep.Id, stepChild.Order, stepChild.Parameters, stepChild.RecipeStepChild);
                     }
                 }
 
@@ -191,10 +185,9 @@ namespace FarmationRecipe.Endpoints.Recipe
                     Id = x.Id,
                     RecipeStepParentId = x.RecipeStepParentId,
                     Order = x.Order,
-                    Description = x.Description,
-                    Duration = x.Duration,
-                    Temperature = x.Temperature,
-                    Pressure = x.Pressure
+                    Parameters = x.Parameters != null ?
+                            x.Parameters.Deserialize<Dictionary<string, object>>()
+                            : null
                 })
                 .OrderBy(x => x.Order)
                 .ToList();
@@ -202,9 +195,7 @@ namespace FarmationRecipe.Endpoints.Recipe
             mainRecipeStep.RecipeStepChild = subSteps;
 
             foreach (var subStep in subSteps)
-            {
                 LoadSubRecipeSteps(subStep, recipeSteps);
-            }
 
             return mainRecipeStep;
         }
