@@ -1,4 +1,5 @@
 using FarmationRecipe.Data;
+using FarmationRecipe.Endpoints.Recipe;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -46,6 +47,8 @@ app.MapGet("/weatherforecast", () =>
 })
 .WithName("GetWeatherForecast")
 .WithOpenApi();
+
+app.MapRecipeEndpoints();
 
 app.Run();
 
