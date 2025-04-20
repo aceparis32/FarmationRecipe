@@ -1,5 +1,7 @@
 ﻿using FarmationRecipe.Data;
 using FarmationRecipe.Endpoints.Recipe.Requests;
+using FarmationRecipe.Endpoints.Recipe.Responses;
+using FarmationRecipe.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace FarmationRecipe.Endpoints.Recipe
@@ -14,18 +16,60 @@ namespace FarmationRecipe.Endpoints.Recipe
             //})
             //.WithName("GetAllRecipes")
             //.Produces<List<Recipe>>(StatusCodes.Status200OK);
-            
-            //routes.MapGet("/recipes/{id}", async (Guid id, AppDbContext db) =>
-            //{
-            //    return await db.Recipes.FindAsync(id)
-            //        is Recipe recipe
-            //            ? Results.Ok(recipe)
-            //            : Results.NotFound();
-            //})
-            //.WithName("GetRecipeById")
-            //.Produces<Recipe>(StatusCodes.Status200OK)
-            //.Produces(StatusCodes.Status404NotFound);
-            
+
+            routes.MapGet("/recipes/{id}", async (Guid id, AppDbContext db, CancellationToken cancellationToken) =>
+            {
+                var recipe = await db.Recipes
+                    .Include(x => x.RecipeIngredients)
+                    .Include(x => x.RecipeSteps)
+                    .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+                if (recipe == null)
+                    return Results.NotFound("Recipe data not found!");
+
+                var recipeResponse = new GetRecipeByIdResponse
+                {
+                    Id = recipe.Id,
+                    Name = recipe.Name,
+                    RecipeIngredients = recipe.RecipeIngredients
+                        .Select(x => new RecipeIngredientsResponse
+                        {
+                            Id = x.Id,
+                            Name = x.Name,
+                            Amount = x.Amount
+                        }).ToList(),
+                };
+
+                var mainRecipeSteps = recipe.RecipeSteps
+                    .Where(x => x.RecipeStepParentId == null)
+                    .Select(x => new RecipeStepResponse
+                    {
+                        Id = x.Id,
+                        RecipeStepParentId = x.RecipeStepParentId,
+                        Order = x.Order,
+                        Description = x.Description,
+                        Duration = x.Duration,
+                        Temperature = x.Temperature,
+                        Pressure = x.Pressure
+                    })
+                    .OrderBy(x => x.Order)
+                    .ToList();
+
+                foreach (var mainRecipeStep in mainRecipeSteps)
+                {
+                    mainRecipeStep.RecipeStepChild = [];
+                    mainRecipeStep.RecipeStepChild.Add(LoadSubRecipeSteps(mainRecipeStep, recipe.RecipeSteps));
+                }
+
+                recipeResponse.RecipeSteps = mainRecipeSteps;
+
+                return Results.Ok(recipeResponse);
+            })
+            .WithName("GetRecipeById")
+            .WithTags(["Recipe"])
+            .Produces<GetRecipeByIdResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
             routes.MapPost("/recipes", async (CreateRecipeRequest request, AppDbContext db, CancellationToken cancellationToken) =>
             {
                 var isExist = await db.Recipes.AnyAsync(x => x.Name == request.Name, cancellationToken);
@@ -108,9 +152,9 @@ namespace FarmationRecipe.Endpoints.Recipe
                 return Results.NoContent();
             })
             .WithName("CreateRecipe")
-            .WithTags([ "Recipe" ])
+            .WithTags(["Recipe"])
             .Produces(StatusCodes.Status204NoContent);
-            
+
             //routes.MapPut("/recipes/{id}", async (Guid id, Recipe inputRecipe, AppDbContext db) =>
             //{
             //    var recipe = await db.Recipes.FindAsync(id);
@@ -122,7 +166,7 @@ namespace FarmationRecipe.Endpoints.Recipe
             //.WithName("UpdateRecipe")
             //.Produces(StatusCodes.Status204NoContent)
             //.Produces(StatusCodes.Status404NotFound);
-            
+
             //routes.MapDelete("/recipes/{id}", async (Guid id, AppDbContext db) =>
             //{
             //    if (await db.Recipes.FindAsync(id) is Recipe recipe)
@@ -136,6 +180,33 @@ namespace FarmationRecipe.Endpoints.Recipe
             //.WithName("DeleteRecipe")
             //.Produces<Recipe>(StatusCodes.Status200OK)
             //.Produces(StatusCodes.Status404NotFound);
+        }
+
+        private static RecipeStepResponse LoadSubRecipeSteps(RecipeStepResponse mainRecipeStep, ICollection<RecipeStep> recipeSteps)
+        {
+            var subSteps = recipeSteps
+                .Where(x => x.RecipeStepParentId == mainRecipeStep.Id)
+                .Select(x => new RecipeStepResponse
+                {
+                    Id = x.Id,
+                    RecipeStepParentId = x.RecipeStepParentId,
+                    Order = x.Order,
+                    Description = x.Description,
+                    Duration = x.Duration,
+                    Temperature = x.Temperature,
+                    Pressure = x.Pressure
+                })
+                .OrderBy(x => x.Order)
+                .ToList();
+
+            mainRecipeStep.RecipeStepChild = subSteps;
+
+            foreach (var subStep in subSteps)
+            {
+                LoadSubRecipeSteps(subStep, recipeSteps);
+            }
+
+            return mainRecipeStep;
         }
     }
 }
