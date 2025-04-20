@@ -18,6 +18,8 @@ namespace FarmationRecipe.Configurations
                 .WithMany(r => r.RecipeSteps)
                 .HasForeignKey(rs => rs.RecipeId)
                 .OnDelete(DeleteBehavior.Cascade);
+            builder.Property(rs => rs.Parameters)
+                .HasColumnType("jsonb");
         }
     }
 }

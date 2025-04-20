@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
 
 namespace FarmationRecipe.Models
 {
@@ -13,6 +14,7 @@ namespace FarmationRecipe.Models
         public int Duration { get; set; }
         public float Temperature { get; set; }
         public float Pressure { get; set; }
+        public JsonDocument? Parameters { get; set; } = JsonDocument.Parse("{}");
 
         public virtual Recipe Recipe { get; set; } = null!;
         public virtual RecipeStep? RecipeStepParent { get; set; }
